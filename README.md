@@ -4,5 +4,4 @@ Repo de la práctica 01 de BBDD no relacionales
 
 Tareas pendientes:
 
-Javier: Crear mainServer con simulación de lógica de envío de mensajes a redisDocker.
-
+Javier: Crear proceso para creación de velas
