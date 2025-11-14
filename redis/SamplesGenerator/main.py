@@ -51,7 +51,7 @@ def main():
             # Enviar a Redis número de solicitudes
             key = f"requests:{ts}"
             r.incrby(key, n_requests)
-            r.expire(key, 30)  # Evitar sobreexceso de registros (30 segs)
+            r.expire(key, 120)  # Evitar sobreexceso de registros (120 segs) -> Suficientes para leer 20 velas
             
             print(f"[{ts}] Peticiones generadas: {n_requests}")
             

@@ -1,0 +1,11 @@
+[project]
+name = "metricsgenerator"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dash>=3.3.0",
+    "plotly>=6.4.0",
+    "redis>=7.0.1",
+]
