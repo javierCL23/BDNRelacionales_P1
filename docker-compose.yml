@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  # Redis Master (principal)
+  redis-master:
+    image: redis:7-alpine
+    container_name: redis-master
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass myredispassword
+    volumes:
+      - redis-master-data:/data
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "myredispassword", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Redis Replica 1
+  redis-replica-1:
+    image: redis:7-alpine
+    container_name: redis-replica-1
+    ports:
+      - "6380:6379"
+    command: redis-server --replicaof redis-master 6379 --masterauth myredispassword --requirepass myredispassword
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "myredispassword", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Redis Replica 2
+  redis-replica-2:
+    image: redis:7-alpine
+    container_name: redis-replica-2
+    ports:
+      - "6381:6379"
+    command: redis-server --replicaof redis-master 6379 --masterauth myredispassword --requirepass myredispassword
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "myredispassword", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Aplicación Web
+  webapp:
+    build:
+      context: ./redis/WebApp
+      dockerfile: Dockerfile
+    container_name: techstore-webapp
+    ports:
+      - "5000:5000"
+    environment:
+      - REDIS_HOST=redis-master
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=myredispassword
+      - FLASK_ENV=development
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - redis-network
+    volumes:
+      - ./redis/WebApp:/app
+
+  # Dashboard de Métricas (trabajo de tu compañero)
+  metrics-dashboard:
+    build:
+      context: ./redis/MetricsGenerator
+      dockerfile: Dockerfile
+    container_name: metrics-dashboard
+    ports:
+      - "8050:8050"
+    environment:
+      - REDIS_HOST=redis-master
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=myredispassword
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - redis-network
+    volumes:
+      - ./redis/MetricsGenerator:/app
+
+  # Generador de Muestras (trabajo de tu compañero)
+  samples-generator:
+    build:
+      context: ./redis/SamplesGenerator
+      dockerfile: Dockerfile
+    container_name: samples-generator
+    environment:
+      - REDIS_HOST=redis-master
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=myredispassword
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - redis-network
+    volumes:
+      - ./redis/SamplesGenerator:/app
+
+networks:
+  redis-network:
+    driver: bridge
+
+volumes:
+  redis-master-data:

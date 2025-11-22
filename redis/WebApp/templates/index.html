@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TechStore - Productos de Tecnología</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <nav class="navbar">
+            <div class="container">
+                <div class="logo">
+                    <h1>🚀 TechStore</h1>
+                </div>
+                <ul class="nav-menu">
+                    <li><a href="#" class="nav-link" data-page="home">Inicio</a></li>
+                    <li><a href="#" class="nav-link" data-page="products">Productos</a></li>
+                    <li><a href="#" class="nav-link" data-page="blog">Blog</a></li>
+                    <li><a href="#" class="nav-link" data-page="contact">Contacto</a></li>
+                </ul>
+                <div class="search-box">
+                    <input type="text" id="search-input" placeholder="Buscar productos...">
+                    <button id="search-btn">🔍</button>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h2>Las Mejores Ofertas en Tecnología</h2>
+            <p>Encuentra los productos más innovadores al mejor precio</p>
+            <button class="cta-button" id="hero-cta">Ver Ofertas</button>
+        </div>
+    </section>
+
+    <!-- Products Grid -->
+    <section class="products">
+        <div class="container">
+            <h2>Productos Destacados</h2>
+            <div class="product-grid" id="product-grid">
+                <div class="product-card" data-product-id="1">
+                    <div class="product-image">📱</div>
+                    <h3>Smartphone Pro X</h3>
+                    <p class="price">899€</p>
+                    <p class="description">El smartphone más avanzado del mercado</p>
+                    <button class="btn-add-cart">Añadir al carrito</button>
+                </div>
+
+                <div class="product-card" data-product-id="2">
+                    <div class="product-image">💻</div>
+                    <h3>Laptop Ultra 15"</h3>
+                    <p class="price">1299€</p>
+                    <p class="description">Potencia profesional para tus proyectos</p>
+                    <button class="btn-add-cart">Añadir al carrito</button>
+                </div>
+
+                <div class="product-card" data-product-id="3">
+                    <div class="product-image">🎧</div>
+                    <h3>Auriculares Wireless</h3>
+                    <p class="price">199€</p>
+                    <p class="description">Sonido premium con cancelación de ruido</p>
+                    <button class="btn-add-cart">Añadir al carrito</button>
+                </div>
+
+                <div class="product-card" data-product-id="4">
+                    <div class="product-image">⌚</div>
+                    <h3>Smartwatch Fit</h3>
+                    <p class="price">299€</p>
+                    <p class="description">Tu compañero perfecto para el deporte</p>
+                    <button class="btn-add-cart">Añadir al carrito</button>
+                </div>
+
+                <div class="product-card" data-product-id="5">
+                    <div class="product-image">📷</div>
+                    <h3>Cámara Digital 4K</h3>
+                    <p class="price">799€</p>
+                    <p class="description">Captura cada momento en alta definición</p>
+                    <button class="btn-add-cart">Añadir al carrito</button>
+                </div>
+
+                <div class="product-card" data-product-id="6">
+                    <div class="product-image">🖥️</div>
+                    <h3>Monitor Gaming 27"</h3>
+                    <p class="price">449€</p>
+                    <p class="description">144Hz para la mejor experiencia gaming</p>
+                    <button class="btn-add-cart">Añadir al carrito</button>
+                </div>
+
+                <div class="product-card" data-product-id="7">
+                    <div class="product-image">⌨️</div>
+                    <h3>Teclado Mecánico RGB</h3>
+                    <p class="price">129€</p>
+                    <p class="description">Switches mecánicos para profesionales</p>
+                    <button class="btn-add-cart">Añadir al carrito</button>
+                </div>
+
+                <div class="product-card" data-product-id="8">
+                    <div class="product-image">🖱️</div>
+                    <h3>Ratón Gaming Pro</h3>
+                    <p class="price">79€</p>
+                    <p class="description">Precisión máxima con 16000 DPI</p>
+                    <button class="btn-add-cart">Añadir al carrito</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Blog Section -->
+    <section class="blog">
+        <div class="container">
+            <h2>Últimas Noticias</h2>
+            <div class="blog-grid">
+                <article class="blog-card" data-article-id="1">
+                    <h3>📰 Las nuevas tendencias en IA para 2025</h3>
+                    <p class="meta">Hace 2 horas | Tecnología</p>
+                    <p>Descubre cómo la inteligencia artificial está transformando...</p>
+                    <button class="btn-read-more">Leer más</button>
+                </article>
+
+                <article class="blog-card" data-article-id="2">
+                    <h3>📰 Comparativa: Mejores smartphones del año</h3>
+                    <p class="meta">Hace 5 horas | Reviews</p>
+                    <p>Analizamos los smartphones más destacados del mercado...</p>
+                    <button class="btn-read-more">Leer más</button>
+                </article>
+
+                <article class="blog-card" data-article-id="3">
+                    <h3>📰 Cómo optimizar tu setup gaming</h3>
+                    <p class="meta">Hace 1 día | Gaming</p>
+                    <p>Consejos profesionales para mejorar tu experiencia de juego...</p>
+                    <button class="btn-read-more">Leer más</button>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Dashboard (para visualizar métricas en tiempo real) -->
+    <section class="stats-dashboard" id="stats-dashboard">
+        <div class="container">
+            <h2>📊 Métricas en Tiempo Real</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Visitantes Activos</h3>
+                    <p class="stat-value" id="active-users">-</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Peticiones/Segundo</h3>
+                    <p class="stat-value" id="requests-per-sec">-</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Uso de CPU</h3>
+                    <p class="stat-value" id="cpu-usage">-</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Latencia Media</h3>
+                    <p class="stat-value" id="avg-latency">-</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 TechStore - Proyecto BDNR Universidad Rey Juan Carlos</p>
+            <p>Sistema de monitorización en tiempo real con Redis</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/events.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/metrics.js') }}"></script>
+</body>
+</html>

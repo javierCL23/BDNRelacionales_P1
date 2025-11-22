@@ -1,4 +1,5 @@
 import time
+import os
 from math import sin
 
 from numpy.random import normal
@@ -6,7 +7,7 @@ import redis as rd
 
 
 
-def connectDB(host: str = "localhost", port: int = 6379 , db: int  = 0) -> rd.Redis:
+def connectDB(host: str = None, port: int = None, db: int = 0, password: str = None) -> rd.Redis:
     """
     Conecta a una base de datos Redis en caso de existir conexión posible. En caso contrario devuelve None
 
@@ -14,12 +15,22 @@ def connectDB(host: str = "localhost", port: int = 6379 , db: int  = 0) -> rd.Re
         host: Dirección IP en la que escucha la base de datos
         port: Puerto en el que escucha la base de datos
         db: Base de datos redis a la que conectarse
+        password: Contraseña de Redis (opcional)
     """
+    # Usar variables de entorno si no se proporcionan
+    if host is None:
+        host = os.getenv('REDIS_HOST', 'localhost')
+    if port is None:
+        port = int(os.getenv('REDIS_PORT', 6379))
+    if password is None:
+        password = os.getenv('REDIS_PASSWORD', None)
+
     try:
-        r = rd.Redis(host,port,db=db)
+        r = rd.Redis(host=host, port=port, db=db, password=password, decode_responses=False)
         r.ping()
         return r
     except rd.ConnectionError as e:
+        print(f"Error de conexión: {e}")
         return None
 
 
