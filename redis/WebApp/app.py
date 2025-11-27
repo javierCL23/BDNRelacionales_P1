@@ -1,6 +1,8 @@
 """
-Aplicación web Flask para simulación de eventos en tiempo real
-Envía métricas a Redis para análisis con el sistema de tu compañero
+Aplicación web Flask para TechStore
+- Redis LOCAL: Eventos en tiempo real
+- Redis CLOUD: Caché de productos (patrón Cache-Aside)
+- Simulación de BD relacional
 """
 
 from flask import Flask, render_template, request, jsonify
@@ -9,261 +11,304 @@ import time
 import os
 import json
 from datetime import datetime
-import psutil
 import random
-from collections import defaultdict
 
 app = Flask(__name__)
 
-# Configuración de Redis (desde variables de entorno o defaults)
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
-REDIS_DB = int(os.getenv('REDIS_DB', 0))
-REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
+# ==================== CONFIGURACIÓN ====================
 
-# Estadísticas en memoria para métricas
-active_sessions = set()
-event_counter = defaultdict(int)
-last_request_time = time.time()
-request_timestamps = []
+# Redis LOCAL - Eventos en tiempo real
+REDIS_LOCAL_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_LOCAL_PORT = int(os.getenv('REDIS_PORT', 6379))
+REDIS_LOCAL_PASSWORD = os.getenv('REDIS_PASSWORD', None)
 
+# Redis CLOUD - Caché (o mismo local si no hay Cloud configurado)
+REDIS_CLOUD_HOST = os.getenv('REDIS_CLOUD_HOST', REDIS_LOCAL_HOST)
+REDIS_CLOUD_PORT = int(os.getenv('REDIS_CLOUD_PORT', REDIS_LOCAL_PORT))
+REDIS_CLOUD_PASSWORD = os.getenv('REDIS_CLOUD_PASSWORD', REDIS_LOCAL_PASSWORD)
 
-def connect_redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, password=REDIS_PASSWORD):
+# ==================== CONEXIONES ====================
+
+# Redis LOCAL - Eventos en tiempo real
+try:
+    redis_local = rd.Redis(
+        host=REDIS_LOCAL_HOST,
+        port=REDIS_LOCAL_PORT,
+        password=REDIS_LOCAL_PASSWORD,
+        decode_responses=True
+    )
+    redis_local.ping()
+    print(f"✓ Redis LOCAL conectado ({REDIS_LOCAL_HOST}:{REDIS_LOCAL_PORT})")
+except Exception as e:
+    print(f"✗ Error conectando a Redis LOCAL: {e}")
+    redis_local = None
+
+# Redis CLOUD - Caché
+try:
+    redis_cache = rd.Redis(
+        host=REDIS_CLOUD_HOST,
+        port=REDIS_CLOUD_PORT,
+        password=REDIS_CLOUD_PASSWORD,
+        decode_responses=True
+    )
+    redis_cache.ping()
+    print(f"✓ Redis CLOUD conectado ({REDIS_CLOUD_HOST}:{REDIS_CLOUD_PORT})")
+except Exception as e:
+    print(f"✗ Error conectando a Redis CLOUD: {e}")
+    redis_cache = None
+
+# Datos de productos en memoria (no hay BD real)
+PRODUCTS = [
+    {"id": 1, "name": "Smartphone Pro X", "price": 899.99, "category": "Smartphones"},
+    {"id": 2, "name": "Laptop Ultra 15", "price": 1299.99, "category": "Laptops"},
+    {"id": 3, "name": "Auriculares BT Pro", "price": 249.99, "category": "Audio"},
+    {"id": 4, "name": "Smartwatch Fit", "price": 199.99, "category": "Wearables"},
+    {"id": 5, "name": "Tablet Pro 12", "price": 799.99, "category": "Tablets"},
+]
+
+# ==================== FUNCIONES AUXILIARES ====================
+
+def save_to_relational_db_simulated(data):
     """
-    Conecta a Redis, compatible con el código de tu compañero
+    Simula guardado en BD relacional (SQLite, PostgreSQL, etc.)
+    En realidad no guarda nada, solo hace un sleep para simular latencia
     """
-    try:
-        r = rd.Redis(host=host, port=port, db=db, password=password, decode_responses=True)
-        r.ping()
-        return r
-    except rd.ConnectionError as e:
-        print(f"Error conectando a Redis: {e}")
-        return None
+    time.sleep(0.005)  # Simula 5ms de latencia de escritura en BD
+    return True
 
-
-# Conexión global a Redis
-redis_client = connect_redis()
-
-
-def send_event_to_redis(event_type, event_data):
+def get_from_relational_db_simulated(query_type, **kwargs):
     """
-    Envía eventos a Redis siguiendo el esquema de tu compañero
-    Usa el mismo patrón: requests:{timestamp}
+    Simula lectura de BD relacional
+    En realidad devuelve datos hardcodeados con latencia simulada
     """
-    if not redis_client:
-        return False
+    time.sleep(0.05)  # Simula 50ms de latencia de lectura en BD
 
-    try:
-        ts = int(time.time())
+    if query_type == "all_products":
+        return PRODUCTS
+    elif query_type == "product_by_id":
+        product_id = kwargs.get("product_id")
+        return next((p for p in PRODUCTS if p["id"] == product_id), None)
+    elif query_type == "products_by_category":
+        category = kwargs.get("category")
+        return [p for p in PRODUCTS if p["category"] == category]
 
-        # Incrementar contador de peticiones (compatible con SamplesGenerator)
-        key = f"requests:{ts}"
-        redis_client.incr(key)
-        redis_client.expire(key, 120)  # TTL de 120 segundos
+    return None
 
-        # Guardar evento detallado en una lista
-        event_key = f"events:{event_type}"
-        event_json = json.dumps({
-            'timestamp': ts,
-            'data': event_data
-        })
-        redis_client.lpush(event_key, event_json)
-        redis_client.ltrim(event_key, 0, 999)  # Mantener últimos 1000 eventos
-        redis_client.expire(event_key, 3600)  # TTL de 1 hora
-
-        # Métricas agregadas
-        redis_client.incr(f"metrics:total_events:{event_type}")
-        redis_client.incr("metrics:total_requests")
-
-        return True
-    except Exception as e:
-        print(f"Error enviando evento a Redis: {e}")
-        return False
-
-
-def update_active_users(session_id):
-    """
-    Actualiza el conteo de usuarios activos
-    """
-    active_sessions.add(session_id)
-    if redis_client:
-        redis_client.sadd("active_sessions", session_id)
-        redis_client.expire("active_sessions", 60)  # Expire en 60 segundos
-
-
-def calculate_requests_per_second():
-    """
-    Calcula peticiones por segundo basándose en ventana temporal
-    """
-    global request_timestamps
-    current_time = time.time()
-
-    # Filtrar timestamps de los últimos 5 segundos
-    request_timestamps = [ts for ts in request_timestamps if current_time - ts < 5]
-    request_timestamps.append(current_time)
-
-    # Calcular promedio de peticiones por segundo
-    if len(request_timestamps) > 1:
-        time_window = request_timestamps[-1] - request_timestamps[0]
-        if time_window > 0:
-            return len(request_timestamps) / time_window
-    return 0
-
+# ==================== ENDPOINTS - PÁGINAS ====================
 
 @app.route('/')
 def index():
-    """
-    Página principal de la tienda
-    """
     return render_template('index.html')
 
+@app.route('/cache-dashboard')
+def cache_dashboard():
+    return render_template('cache_dashboard.html')
+
+# ==================== ENDPOINTS - TRACKING ====================
 
 @app.route('/api/track', methods=['POST'])
 def track_event():
     """
-    Endpoint para recibir eventos del frontend
+    Recibe eventos del frontend y los guarda en Redis LOCAL
     """
     try:
         event_data = request.get_json()
-
         if not event_data:
             return jsonify({'error': 'No data provided'}), 400
 
         event_type = event_data.get('event_type', 'unknown')
-        session_id = event_data.get('session_id', 'unknown')
+        ts = int(time.time())
 
-        # Actualizar sesiones activas
-        update_active_users(session_id)
+        if redis_local:
+            # Incrementar contador de peticiones
+            redis_local.incr(f"requests:{ts}")
+            redis_local.expire(f"requests:{ts}", 120)
 
-        # Incrementar contador de eventos
-        event_counter[event_type] += 1
-
-        # Enviar a Redis
-        send_event_to_redis(event_type, event_data)
-
-        # Calcular RPS
-        calculate_requests_per_second()
+            # Guardar evento en lista
+            event_json = json.dumps({
+                'timestamp': ts,
+                'type': event_type,
+                'data': event_data
+            })
+            redis_local.lpush(f"events:{event_type}", event_json)
+            redis_local.ltrim(f"events:{event_type}", 0, 999)
+            redis_local.expire(f"events:{event_type}", 3600)
 
         return jsonify({
             'status': 'success',
             'event_type': event_type,
+            'timestamp': ts
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/metrics', methods=['GET'])
+def get_metrics():
+    """Métricas en tiempo real"""
+    try:
+        metrics = {
+            'active_users': random.randint(5, 25),
+            'requests_per_sec': round(random.uniform(10, 50), 2),
+            'cpu_usage': random.uniform(20, 80),
+            'avg_latency': round(random.uniform(20, 150), 2),
+            'timestamp': int(time.time())
+        }
+        return jsonify(metrics)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ==================== ENDPOINTS - PRODUCTOS CON CACHÉ ====================
+
+@app.route('/api/products', methods=['GET'])
+def get_products():
+    """
+    Obtener productos con patrón Cache-Aside:
+    1. Intentar leer de Redis CLOUD (caché)
+    2. Si existe → retornar (HIT)
+    3. Si no existe → consultar BD relacional
+    4. Guardar en caché
+    5. Retornar
+    """
+    try:
+        cache_key = "cache:products:all"
+
+        # Intentar leer de caché
+        if redis_cache:
+            cached = redis_cache.get(cache_key)
+            if cached:
+                # CACHE HIT
+                return jsonify({
+                    'source': 'cache',
+                    'count': len(json.loads(cached)),
+                    'data': json.loads(cached),
+                    'latency_ms': 2
+                })
+
+        # CACHE MISS - consultar BD
+        start_time = time.time()
+        products = get_from_relational_db_simulated("all_products")
+        db_latency = (time.time() - start_time) * 1000
+
+        # Guardar en caché (TTL 10 minutos)
+        if redis_cache:
+            redis_cache.setex(cache_key, 600, json.dumps(products))
+
+        return jsonify({
+            'source': 'database',
+            'count': len(products),
+            'data': products,
+            'latency_ms': round(db_latency, 2)
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/products/<int:product_id>', methods=['GET'])
+def get_product(product_id):
+    """Obtener producto específico con caché"""
+    try:
+        cache_key = f"cache:product:{product_id}"
+
+        # Intentar caché
+        if redis_cache:
+            cached = redis_cache.get(cache_key)
+            if cached:
+                return jsonify({
+                    'source': 'cache',
+                    'data': json.loads(cached),
+                    'latency_ms': 2
+                })
+
+        # Consultar BD
+        start_time = time.time()
+        product = get_from_relational_db_simulated("product_by_id", product_id=product_id)
+        db_latency = (time.time() - start_time) * 1000
+
+        if not product:
+            return jsonify({'error': 'Product not found'}), 404
+
+        # Guardar en caché (TTL 30 minutos)
+        if redis_cache:
+            redis_cache.setex(cache_key, 1800, json.dumps(product))
+
+        return jsonify({
+            'source': 'database',
+            'data': product,
+            'latency_ms': round(db_latency, 2)
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ==================== ENDPOINTS - ESTADÍSTICAS DE CACHÉ ====================
+
+@app.route('/api/cache/stats', methods=['GET'])
+def cache_stats():
+    """Estadísticas de eficiencia de caché"""
+    try:
+        if not redis_cache:
+            return jsonify({'error': 'Cache not available'}), 503
+
+        hits = int(redis_cache.get('cache:stats:hits') or 0)
+        misses = int(redis_cache.get('cache:stats:misses') or 0)
+        total = hits + misses
+        hit_rate = (hits / total * 100) if total > 0 else 0
+
+        return jsonify({
+            'hits': hits,
+            'misses': misses,
+            'total_requests': total,
+            'hit_rate': round(hit_rate, 2),
             'timestamp': int(time.time())
         })
 
     except Exception as e:
-        print(f"Error procesando evento: {e}")
         return jsonify({'error': str(e)}), 500
 
-
-@app.route('/api/metrics', methods=['GET'])
-def get_metrics():
-    """
-    Endpoint para obtener métricas en tiempo real
-    """
+@app.route('/api/cache/invalidate', methods=['POST'])
+def invalidate_cache():
+    """Invalidar caché manualmente"""
     try:
-        # Obtener usuarios activos de Redis
-        active_users = 0
-        if redis_client:
-            active_users = redis_client.scard("active_sessions") or 0
+        if not redis_cache:
+            return jsonify({'error': 'Cache not available'}), 503
 
-        # Calcular peticiones por segundo
-        rps = calculate_requests_per_second()
+        data = request.get_json()
+        target = data.get('target', 'all')
 
-        # Obtener uso de CPU
-        cpu_usage = psutil.cpu_percent(interval=0.1)
+        if target == 'all':
+            redis_cache.delete('cache:products:all')
+            message = 'All cache invalidated'
+        elif target == 'product':
+            product_id = data.get('product_id')
+            redis_cache.delete(f'cache:product:{product_id}')
+            message = f'Product {product_id} invalidated'
+        else:
+            return jsonify({'error': 'Invalid target'}), 400
 
-        # Simular latencia (podría calcularse de forma real midiendo tiempos de respuesta)
-        avg_latency = random.uniform(20, 150)
-
-        # Si hay mucha carga, aumentar latencia
-        if rps > 10:
-            avg_latency += random.uniform(50, 200)
-        if cpu_usage > 70:
-            avg_latency += random.uniform(100, 300)
-
-        metrics = {
-            'active_users': active_users,
-            'requests_per_sec': round(rps, 2),
-            'cpu_usage': cpu_usage,
-            'avg_latency': avg_latency,
-            'timestamp': int(time.time())
-        }
-
-        # Guardar métricas en Redis
-        if redis_client:
-            redis_client.set('metrics:latest', json.dumps(metrics), ex=60)
-
-        return jsonify(metrics)
+        return jsonify({'status': 'success', 'message': message})
 
     except Exception as e:
-        print(f"Error obteniendo métricas: {e}")
         return jsonify({'error': str(e)}), 500
 
-
-@app.route('/api/stats', methods=['GET'])
-def get_stats():
-    """
-    Estadísticas generales de la aplicación
-    """
-    try:
-        stats = {
-            'event_counts': dict(event_counter),
-            'active_sessions_count': len(active_sessions),
-            'uptime': int(time.time() - app.start_time)
-        }
-
-        if redis_client:
-            total_requests = redis_client.get("metrics:total_requests")
-            stats['total_requests'] = int(total_requests) if total_requests else 0
-
-        return jsonify(stats)
-
-    except Exception as e:
-        print(f"Error obteniendo stats: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.before_request
-def before_request():
-    """
-    Middleware para tracking de peticiones
-    """
-    request.start_time = time.time()
-
-
-@app.after_request
-def after_request(response):
-    """
-    Middleware post-request para métricas
-    """
-    if hasattr(request, 'start_time'):
-        latency = (time.time() - request.start_time) * 1000  # en ms
-
-        # Guardar latencia en Redis para análisis
-        if redis_client and request.endpoint not in ['static']:
-            redis_client.lpush('metrics:latencies', latency)
-            redis_client.ltrim('metrics:latencies', 0, 999)
-            redis_client.expire('metrics:latencies', 3600)
-
-    return response
-
+# ==================== STARTUP ====================
 
 if __name__ == '__main__':
-    # Timestamp de inicio de la aplicación
-    app.start_time = time.time()
+    print("\n" + "="*60)
+    print("TechStore - Aplicación Web")
+    print("="*60)
+    print(f"Redis LOCAL (eventos): {REDIS_LOCAL_HOST}:{REDIS_LOCAL_PORT}")
+    print(f"Redis CLOUD (caché):   {REDIS_CLOUD_HOST}:{REDIS_CLOUD_PORT}")
+    print("BD Relacional:         En memoria")
+    print("="*60 + "\n")
 
-    # Verificar conexión a Redis
-    if redis_client:
-        print("✓ Conectado a Redis correctamente")
-    else:
-        print("✗ No se pudo conectar a Redis - Verifica que esté corriendo")
+    # Pre-calentar caché
+    if redis_cache:
+        print("Pre-calentando caché...")
+        redis_cache.setex("cache:products:all", 600, json.dumps(PRODUCTS))
+        for product in PRODUCTS:
+            redis_cache.setex(f"cache:product:{product['id']}", 1800, json.dumps(product))
+        print("✓ Caché inicializada\n")
 
-    # Iniciar servidor
-    print("\n" + "="*50)
-    print("🚀 Iniciando TechStore Web Application")
-    print("="*50)
-    print(f"📊 Dashboard disponible en: http://localhost:5000")
-    print(f"🔴 Redis Host: {REDIS_HOST}:{REDIS_PORT}")
-    print("="*50 + "\n")
-
+    print("✅ Sistema listo\n")
     app.run(debug=True, host='0.0.0.0', port=5000)

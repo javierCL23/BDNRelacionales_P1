@@ -386,16 +386,21 @@ TODO.txt
 NOTES.txt
 
 # ============================================================================
+# DOCUMENTACIÓN (excluir todos los .md excepto README.md)
+# ============================================================================
+
+*.md
+!README.md
+
+# ============================================================================
 # EXCEPCIONES (archivos que SÍ queremos en el repo)
 # ============================================================================
 
 # Mantener estos archivos importantes
-!README.md
 !requirements.txt
 !docker-compose.yml
 !Dockerfile
 !.gitignore
-!start.sh
 
 # Mantener estructura de carpetas vacías (si es necesario)
 !**/.gitkeep
