@@ -20,10 +20,10 @@ Sistema de comercio electrónico que combina dos tecnologías NoSQL complementar
 │  │ Redis LOCAL  │       │ Redis CLOUD  │               │
 │  │ (Docker)     │       │ (Free Plan)  │               │
 │  │              │       │              │               │
-│  │ • Eventos    │       │ • Caché de   │               │
-│  │   tiempo real│       │   productos  │               │
-│  │ • Métricas   │       │ • Cache-Aside│               │
-│  │ • Pub/Sub    │       │   pattern    │               │
+│  │ • Caché de   │       │ • Métricas   │               │
+│  │   productos  │       │   tiempo real│               │
+│  │ • Cache-Aside│       │ • ACLs       │               │
+│  │ • Replicación│       │ • requests:* │               │
 │  └──────────────┘       └──────────────┘               │
 │         ↑                      ↑                        │
 │         │                      │                        │
@@ -49,23 +49,22 @@ Sistema de comercio electrónico que combina dos tecnologías NoSQL complementar
 ### Parte A - Redis
 
 #### 1. Redis LOCAL (Docker)
-- **Propósito**: Gestión de eventos en tiempo real
-- **Funcionalidades**:
-  - Contador de peticiones por segundo
-  - Almacenamiento de eventos (Lists)
-  - Métricas agregadas (Strings, Sorted Sets)
+- **Propósito**: Caché de productos para la WebApp
+- **Patrón**: Cache-Aside (Lazy Loading)
 - **Configuración**:
   - 1 Master (puerto 6379)
   - 2 Réplicas (puertos 6380, 6381)
-  - Replicación automática configurada
+  - Replicación automática con lag=0
+- **TTL**: 1800 segundos (30 minutos)
+- **Beneficios**: Reduce latencia de ~1000ms a ~1.4ms (99.86% mejora)
 
 #### 2. Redis CLOUD (Plan Free)
-- **Propósito**: Caché de productos
-- **Patrón**: Cache-Aside (Lazy Loading)
-- **TTL configurado**:
-  - Productos individuales: 30 minutos
-  - Lista completa: 10 minutos
-- **Beneficios**: Reduce latencia de ~50ms a ~2ms
+- **Propósito**: Almacenamiento de métricas en tiempo real
+- **Estructura**: Strings con claves `requests:{timestamp}`
+- **ACLs configurados**: 4 usuarios (admin, metrics_writer, metrics_reader, dashboard_user)
+- **Servicios**:
+  - **SamplesGenerator**: Genera tráfico simulado, escribe métricas
+  - **MetricsGenerator**: Lee métricas, dashboard de velas (OHLC)
 
 #### 3. Alta Disponibilidad
 - Replicación Master-Replica
@@ -170,15 +169,15 @@ python cassandra_simple.py
 ### Demo 1: Caché (Cache Hit vs Miss)
 
 ```bash
-# Primera petición (MISS - lento ~50ms)
-curl http://localhost:5000/api/products | jq '.source, .latency_ms'
-# Output: "database", 52.34
+# Primera petición (MISS - lento)
+curl http://localhost:5000/products | jq '.source, .latency_ms'
+# Output: "database", ~1000
 
-# Segunda petición (HIT - rápido ~2ms)
-curl http://localhost:5000/api/products | jq '.source, .latency_ms'
-# Output: "cache", 1.87
+# Segunda petición (HIT - rápido)
+curl http://localhost:5000/products/cached | jq '.source, .latency_ms'
+# Output: "cache", 1.41
 
-# Mejora: ~25x más rápido
+# Mejora: 99.86% más rápido
 ```
 
 ### Demo 2: Replicación Redis
@@ -237,29 +236,35 @@ python cassandra_simple.py
 ├── .gitignore                  # Archivos a ignorar en git
 ├── BD_NO-RELACIONALES_*.pdf    # PDF de la práctica
 ├── README.md                   # Este archivo
+├── MEMORIA.tex                 # Memoria en LaTeX
+├── VERIFICACION_SISTEMA.md     # Verificación completa del sistema
+├── CAMBIOS_ACL.md              # Historial de cambios ACL
+├── COMANDOS_RAPIDOS.md         # Guía de referencia rápida
+├── redis-cloud-acl-setup.sh    # Script verificación ACLs
 ├── cassandra/
 │   ├── schema.cql              # Esquema de tablas
 │   ├── cassandra_simple.py     # Script principal
 │   └── requirements.txt        # Dependencias
 └── redis/
-    ├── SamplesGenerator/       # Generador de métricas
-    │   ├── main.py
+    ├── CacheSimulator/         # Aplicación web (caché)
+    │   ├── app.py              # Flask app
+    │   ├── requirements.txt
     │   ├── Dockerfile
-    │   └── pyproject.toml
+    │   ├── templates/
+    │   │   ├── index.html
+    │   │   ├── cache_dashboard.html
+    │   │   └── products.html
+    │   └── static/
+    │       ├── css/
+    │       └── js/
     ├── MetricsGenerator/       # Dashboard de velas
     │   ├── getCandles.py
     │   ├── Dockerfile
     │   └── pyproject.toml
-    └── WebApp/
-        ├── app.py              # Aplicación Flask
-        ├── requirements.txt    # Flask, redis, requests
+    └── SamplesGenerator/       # Generador de métricas
+        ├── main.py
         ├── Dockerfile
-        ├── templates/          # HTML
-        │   ├── index.html
-        │   └── cache_dashboard.html
-        └── static/             # CSS, JS
-            ├── css/
-            └── js/
+        └── pyproject.toml
 ```
 
 ## API Endpoints
@@ -341,31 +346,44 @@ Anotar:
 
 ### Paso 3: Configurar ACLs
 
-Crear 4 usuarios con diferentes permisos:
+**IMPORTANTE**: En Redis Cloud Free, los ACLs se configuran desde la interfaz web, no por CLI.
+
+Crear 4 usuarios desde la web de Redis Cloud:
+
+| Usuario | Password | Permisos |
+|---------|----------|----------|
+| `admin` | `Admin_techstore_2025` | Todos los comandos |
+| `metrics_writer` | `Metrics_writer_pass_2025` | SET, INCR en requests:* |
+| `metrics_reader` | `Metrics_reader_pass_2025` | GET, KEYS en requests:* |
+| `dashboard_user` | `Dashboard_user_pass_2025` | Solo lectura global |
+
+Verificar desde CLI:
 
 ```bash
-# Conectar a Redis Cloud CLI
-redis-cli -h redis-xxxxx.cloud.redislabs.com -p 12345 -a tu_password
-
-# Crear usuarios
-ACL SETUSER admin on >admin_pass ~* +@all
-ACL SETUSER readonly on >readonly_pass ~* +@read
-ACL SETUSER cache_user on >cache_pass ~cache:* +get +set +del
-ACL SETUSER metrics_user on >metrics_pass ~metrics:* +get +incr
-
-# Verificar
-ACL LIST
+redis-cli -h redis-15381.c92.us-east-1-3.ec2.cloud.redislabs.com \
+          -p 15381 \
+          --user admin \
+          --pass Admin_techstore_2025 \
+          ACL LIST
 ```
 
 ### Paso 4: Actualizar docker-compose.yml
 
 ```yaml
 services:
-  webapp:
+  metrics-dashboard:
     environment:
-      - REDIS_CLOUD_HOST=redis-xxxxx.cloud.redislabs.com
-      - REDIS_CLOUD_PORT=12345
-      - REDIS_CLOUD_PASSWORD=tu_password
+      - REDIS_CLOUD_HOST=redis-15381.c92.us-east-1-3.ec2.cloud.redislabs.com
+      - REDIS_CLOUD_PORT=15381
+      - REDIS_CLOUD_USER=metrics_reader
+      - REDIS_CLOUD_PASSWORD=Metrics_reader_pass_2025
+
+  samples-generator:
+    environment:
+      - REDIS_CLOUD_HOST=redis-15381.c92.us-east-1-3.ec2.cloud.redislabs.com
+      - REDIS_CLOUD_PORT=15381
+      - REDIS_CLOUD_USER=metrics_writer
+      - REDIS_CLOUD_PASSWORD=Metrics_writer_pass_2025
 ```
 
 ## Observabilidad con Redis Insight
@@ -378,21 +396,29 @@ services:
 ### Conexión
 
 1. Abrir Redis Insight
-2. Agregar conexión:
-   - **Nombre**: Redis LOCAL
+2. Agregar conexión LOCAL:
+   - **Nombre**: Redis LOCAL Master
    - **Host**: localhost
    - **Port**: 6379
    - **Password**: myredispassword
 
-3. Agregar segunda conexión para Redis Cloud
+3. Agregar conexión CLOUD:
+   - **Nombre**: Redis CLOUD TechStore
+   - **Host**: redis-15381.c92.us-east-1-3.ec2.cloud.redislabs.com
+   - **Port**: 15381
+   - **Username**: dashboard_user
+   - **Password**: Dashboard_user_pass_2025
 
-### Funcionalidades
+### Funcionalidades a Explorar
 
-- **Browser**: Explorar todas las claves
-- **Workbench**: Ejecutar comandos
-- **Analysis**: Analizar tipos de datos y uso de memoria
-- **Profiler**: Ver comandos en tiempo real
-- **Slowlog**: Comandos lentos
+- **Browser**:
+  - LOCAL: Explorar claves `cache:product:*`
+  - CLOUD: Explorar claves `requests:*`
+- **Workbench**:
+  - LOCAL: `INFO replication` para ver estado de réplicas
+  - CLOUD: `ACL LIST` para ver usuarios configurados
+- **Profiler**: Ver comandos GET/SET en tiempo real mientras usas la WebApp
+- **Analysis**: Analizar uso de memoria por tipo de dato
 
 ## Solución de Problemas
 
