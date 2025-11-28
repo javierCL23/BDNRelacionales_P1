@@ -54,18 +54,23 @@ services:
       timeout: 3s
       retries: 5
 
-  # Aplicación Web
+  # Aplicación Web - CacheSimulator
   webapp:
     build:
-      context: ./redis/WebApp
+      context: ./redis/CacheSimulator
       dockerfile: Dockerfile
     container_name: techstore-webapp
     ports:
       - "5000:5000"
     environment:
-      - REDIS_HOST=redis-master
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=myredispassword
+      # Redis LOCAL para caché
+      - REDIS_LOCAL_HOST=redis-master
+      - REDIS_LOCAL_PORT=6379
+      - REDIS_LOCAL_PASSWORD=myredispassword
+      # Redis CLOUD para métricas
+      - REDIS_CLOUD_HOST=redis-15381.c92.us-east-1-3.ec2.cloud.redislabs.com
+      - REDIS_CLOUD_PORT=15381
+      - REDIS_CLOUD_PASSWORD=yHxDNbPJx8HWPjuuYrqswVkzwlhZdiT3
       - FLASK_ENV=development
     depends_on:
       redis-master:
@@ -73,9 +78,9 @@ services:
     networks:
       - redis-network
     volumes:
-      - ./redis/WebApp:/app
+      - ./redis/CacheSimulator:/app
 
-  # Dashboard de Métricas (trabajo de tu compañero)
+  # Dashboard de Métricas - Lee de Redis CLOUD
   metrics-dashboard:
     build:
       context: ./redis/MetricsGenerator
@@ -84,30 +89,36 @@ services:
     ports:
       - "8050:8050"
     environment:
+      # Redis CLOUD para leer métricas (usuario: metrics_reader)
+      - REDIS_CLOUD_HOST=redis-15381.c92.us-east-1-3.ec2.cloud.redislabs.com
+      - REDIS_CLOUD_PORT=15381
+      - REDIS_CLOUD_USER=metrics_reader
+      - REDIS_CLOUD_PASSWORD=Metrics_reader_pass_2025
+      # Fallback a LOCAL si falla CLOUD
       - REDIS_HOST=redis-master
       - REDIS_PORT=6379
       - REDIS_PASSWORD=myredispassword
-    depends_on:
-      redis-master:
-        condition: service_healthy
     networks:
       - redis-network
     volumes:
       - ./redis/MetricsGenerator:/app
 
-  # Generador de Muestras (trabajo de tu compañero)
+  # Generador de Muestras - Escribe en Redis CLOUD
   samples-generator:
     build:
       context: ./redis/SamplesGenerator
       dockerfile: Dockerfile
     container_name: samples-generator
     environment:
+      # Redis CLOUD para escribir métricas (usuario: metrics_writer)
+      - REDIS_CLOUD_HOST=redis-15381.c92.us-east-1-3.ec2.cloud.redislabs.com
+      - REDIS_CLOUD_PORT=15381
+      - REDIS_CLOUD_USER=metrics_writer
+      - REDIS_CLOUD_PASSWORD=Metrics_writer_pass_2025
+      # Fallback a LOCAL si falla CLOUD
       - REDIS_HOST=redis-master
       - REDIS_PORT=6379
       - REDIS_PASSWORD=myredispassword
-    depends_on:
-      redis-master:
-        condition: service_healthy
     networks:
       - redis-network
     volumes:

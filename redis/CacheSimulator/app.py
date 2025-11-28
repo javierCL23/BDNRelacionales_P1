@@ -15,9 +15,9 @@ import random
 
 app = Flask(__name__)
 
-REDIS_LOCAL_HOST = os.getenv('REDIS_HOST', 'redis')
-REDIS_LOCAL_PORT = int(os.getenv('REDIS_PORT', 6379))
-REDIS_LOCAL_PASSWORD = os.getenv('REDIS_PASSWORD', None)
+REDIS_LOCAL_HOST = os.getenv('REDIS_LOCAL_HOST', 'redis-master')
+REDIS_LOCAL_PORT = int(os.getenv('REDIS_LOCAL_PORT', 6379))
+REDIS_LOCAL_PASSWORD = os.getenv('REDIS_LOCAL_PASSWORD', None)
 
 try:
     redis_cache = rd.Redis(

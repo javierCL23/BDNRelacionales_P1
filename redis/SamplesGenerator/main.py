@@ -7,30 +7,44 @@ import redis as rd
 
 
 
-def connectDB(host: str = None, port: int = None, db: int = 0, password: str = None) -> rd.Redis:
+def connectDB(host: str = None, port: int = None, db: int = 0, username: str = None, password: str = None) -> rd.Redis:
     """
-    Conecta a una base de datos Redis en caso de existir conexión posible. En caso contrario devuelve None
+    Conecta a una base de datos Redis CLOUD para métricas usando ACL.
+    En caso de no existir conexión posible devuelve None
 
     Args:
         host: Dirección IP en la que escucha la base de datos
         port: Puerto en el que escucha la base de datos
         db: Base de datos redis a la que conectarse
+        username: Usuario ACL de Redis (opcional)
         password: Contraseña de Redis (opcional)
     """
-    # Usar variables de entorno si no se proporcionan
+    # Usar variables de entorno de REDIS CLOUD si no se proporcionan
     if host is None:
-        host = os.getenv('REDIS_HOST', 'localhost')
+        host = os.getenv('REDIS_CLOUD_HOST', os.getenv('REDIS_HOST', 'localhost'))
     if port is None:
-        port = int(os.getenv('REDIS_PORT', 6379))
+        port = int(os.getenv('REDIS_CLOUD_PORT', os.getenv('REDIS_PORT', 6379)))
+    if username is None:
+        username = os.getenv('REDIS_CLOUD_USER', None)
     if password is None:
-        password = os.getenv('REDIS_PASSWORD', None)
+        password = os.getenv('REDIS_CLOUD_PASSWORD', os.getenv('REDIS_PASSWORD', None))
 
     try:
-        r = rd.Redis(host=host, port=port, db=db, password=password, decode_responses=False)
+        r = rd.Redis(
+            host=host,
+            port=port,
+            db=db,
+            username=username,
+            password=password,
+            decode_responses=False,
+            socket_connect_timeout=10
+        )
         r.ping()
+        user_info = f" (usuario: {username})" if username else ""
+        print(f"✓ Conectado a Redis CLOUD{user_info}: {host}:{port}")
         return r
     except rd.ConnectionError as e:
-        print(f"Error de conexión: {e}")
+        print(f"✗ Error de conexión a Redis CLOUD: {e}")
         return None
 
 
