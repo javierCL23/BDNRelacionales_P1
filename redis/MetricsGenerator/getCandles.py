@@ -5,7 +5,7 @@ import plotly.graph_objs as go
 import redis as rd
 import time
 import os
-from datetime import datetime
+from datetime import datetime,timezone
 
 
 def connectDB(host: str = None, port: int = None, db: int = 0, username: str = None, password: str = None) -> rd.Redis:
@@ -22,14 +22,14 @@ def connectDB(host: str = None, port: int = None, db: int = 0, username: str = N
     """
     # Usar variables de entorno de REDIS CLOUD si no se proporcionan
     if host is None:
-        host = os.getenv('REDIS_CLOUD_HOST', os.getenv('REDIS_HOST', 'localhost'))
+        host = os.getenv('REDIS_CLOUD_HOST', None)
     if port is None:
-        port = int(os.getenv('REDIS_CLOUD_PORT', os.getenv('REDIS_PORT', 6379)))
+        port = int(os.getenv('REDIS_CLOUD_PORT', 0))
     if username is None:
-        username = os.getenv('REDIS_CLOUD_USER', None)
+        username = os.getenv('REDIS_CLOUD_USER_READER', None)
     if password is None:
-        password = os.getenv('REDIS_CLOUD_PASSWORD', os.getenv('REDIS_PASSWORD', None))
-
+        password = os.getenv('REDIS_CLOUD_PASSWORD_READER', None)
+    print(f"GETCANDLES: {host}:{port} | {username}:{password}")
     try:
         r = rd.Redis(
             host=host,
@@ -56,7 +56,6 @@ if r is None:
     print("No se pudo conectar a Redis")
     exit()
 
-
 # Aplicación web para métricas
 
 
@@ -79,7 +78,7 @@ def get_candles():
     Lee los últimos max_candles*interval segundos de Redis
     y calcula velas tipo OHLC con ventanas no solapadas
     """
-    ts_now = int(time.time())
+    ts_now = r.time()[0]
     
     # Calcular el inicio alineado a intervalos de 5 segundos
     # Esto asegura que las ventanas siempre terminen en múltiplos de 5
@@ -108,7 +107,7 @@ def get_candles():
         if not group:
             # Si no hay datos, crear vela con valores 0
             candles.append({
-                'time': datetime.fromtimestamp(candle_end),
+                'time': datetime.fromtimestamp(candle_end, tz=timezone.utc),
                 'open': 0,
                 'high': 0,
                 'low': 0,
@@ -123,13 +122,13 @@ def get_candles():
         l = min(v for _, v in group)  # mínimo
         
         candles.append({
-            'time': datetime.fromtimestamp(candle_end),
+            'time': datetime.fromtimestamp(candle_end, tz=timezone.utc),
             'open': o,
             'high': h,
             'low': l,
             'close': c
         })
-    
+    print(candles)
     return candles
 
 @app.callback(

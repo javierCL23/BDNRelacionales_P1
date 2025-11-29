@@ -1,7 +1,6 @@
 """
 Aplicación web Flask para TechStore
 - Redis LOCAL: Eventos en tiempo real
-- Redis CLOUD: Caché de productos (patrón Cache-Aside)
 - Simulación de BD relacional
 """
 

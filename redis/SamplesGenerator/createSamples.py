@@ -21,14 +21,15 @@ def connectDB(host: str = None, port: int = None, db: int = 0, username: str = N
     """
     # Usar variables de entorno de REDIS CLOUD si no se proporcionan
     if host is None:
-        host = os.getenv('REDIS_CLOUD_HOST', os.getenv('REDIS_HOST', 'localhost'))
+        host = os.getenv('REDIS_CLOUD_HOST', None)
     if port is None:
-        port = int(os.getenv('REDIS_CLOUD_PORT', os.getenv('REDIS_PORT', 6379)))
+        port = int(os.getenv('REDIS_CLOUD_PORT', 0))
     if username is None:
-        username = os.getenv('REDIS_CLOUD_USER', None)
+        username = os.getenv('REDIS_CLOUD_USER_WRITER', None)
     if password is None:
-        password = os.getenv('REDIS_CLOUD_PASSWORD', os.getenv('REDIS_PASSWORD', None))
+        password = os.getenv('REDIS_CLOUD_PASSWORD_WRITER', None)
 
+    print(f"GETCANDLES: {host}:{port} | {username}:{password}")
     try:
         r = rd.Redis(
             host=host,
